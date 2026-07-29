@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --bg-app:#1c1b19;
@@ -168,6 +169,83 @@
     line-height:1.35;
     white-space:pre-wrap;
   }
+  .bulk-section{
+    margin:0 32px 32px;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    padding:24px 28px;
+  }
+  .bulk-section h2{
+    margin:0 0 4px;
+    font-size:17px;
+    font-weight:800;
+  }
+  .bulk-section p.hint{
+    margin:0 0 16px;
+    color:var(--text-dim);
+    font-size:13px;
+    line-height:1.5;
+  }
+  .bulk-section textarea{
+    width:100%;
+    min-height:180px;
+    background:#1c1b19;
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:12px 14px;
+    color:var(--text);
+    font-family:inherit;
+    font-size:14px;
+    line-height:1.6;
+    resize:vertical;
+  }
+  .bulk-controls{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-top:14px;
+    flex-wrap:wrap;
+  }
+  .bulk-controls label{
+    font-size:12px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--text-dim);
+  }
+  .bulk-controls select{
+    background:#1c1b19;
+    border:1px solid var(--panel-border);
+    color:var(--text);
+    padding:8px 10px;
+    border-radius:8px;
+    font-family:inherit;
+    font-size:14px;
+  }
+  #bulkGenerate{
+    background:var(--accent);
+    color:#fff;
+    padding:10px 20px;
+    border-radius:8px;
+    border:none;
+    font-family:inherit;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+  }
+  #bulkGenerate:disabled{opacity:0.5;cursor:not-allowed;}
+  #bulkStatus{
+    font-size:13px;
+    color:var(--text-dim);
+    margin-left:4px;
+  }
+  #bulkPreviewStage{
+    position:absolute;
+    left:-9999px;
+    top:0;
+  }
+
   footer{
     padding:16px 32px 28px;
     color:var(--text-dim);
@@ -254,6 +332,38 @@
   </div>
 </main>
 
+<section class="bulk-section">
+  <h2>Bulk generation</h2>
+  <p class="hint">
+    Paste word/explanation pairs, one per line, alternating — word, then its explanation, word, then its explanation, and so on (blank lines are ignored). Uses the colors and font sizes set above for every card. All cards are packaged into a single .zip you can download in one go.
+  </p>
+  <textarea id="bulkInput" placeholder="Resilient
+मुश्किलों से जल्दी उबरने वाला
+Adaptable
+परिस्थितियों के अनुसार खुद को ढालने वाला"></textarea>
+  <div class="bulk-controls">
+    <label for="bulkFormat">Format</label>
+    <select id="bulkFormat">
+      <option value="png">PNG</option>
+      <option value="svg">SVG</option>
+    </select>
+    <button id="bulkGenerate">Generate &amp; Download ZIP</button>
+    <span id="bulkStatus"></span>
+  </div>
+</section>
+
+<!-- Hidden offscreen stage used to render each bulk card at full size before capture -->
+<div id="bulkPreviewStage">
+  <div id="bulkCard" style="width:920px;height:1150px;display:flex;flex-direction:column;overflow:hidden;">
+    <div id="bulkCardTop" style="flex:1;display:flex;align-items:center;justify-content:center;padding:64px;text-align:center;">
+      <div id="bulkWordText" style="font-family:'Inter',sans-serif;font-weight:800;line-height:1.05;letter-spacing:-0.01em;white-space:pre-wrap;"></div>
+    </div>
+    <div id="bulkCardBottom" style="flex:1;display:flex;align-items:center;justify-content:center;padding:64px;text-align:center;">
+      <div id="bulkExplanationText" style="font-family:'Noto Sans Devanagari','Inter',sans-serif;font-weight:600;line-height:1.35;white-space:pre-wrap;"></div>
+    </div>
+  </div>
+</div>
+
 <footer>
   Runs entirely in the browser — no server needed. Host this folder as-is on GitHub Pages (Settings → Pages → deploy from branch).
 </footer>
@@ -301,13 +411,52 @@ function render(){
 
 render();
 
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+async function saveFile(blob, filename, mimeType){
+  // Prefer the native share sheet (works reliably on iOS Safari — gives a "Save Image" option)
+  if (navigator.canShare) {
+    try {
+      const file = new File([blob], filename, {type: mimeType});
+      if (navigator.canShare({files: [file]})) {
+        await navigator.share({files: [file]});
+        return;
+      }
+    } catch (err) {
+      // user cancelled the share sheet, or share failed — fall through to other methods
+      if (err && err.name === 'AbortError') return;
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+
+  if (isIOS()) {
+    // iOS Safari won't auto-download via <a download>. Open it in a new tab instead
+    // so the user can long-press the image and choose "Add to Photos" / "Save Image".
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return;
+  }
+
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = url;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 document.getElementById('downloadPng').addEventListener('click', () => {
   const card = document.getElementById('card');
   html2canvas(card, {scale: 2, backgroundColor: null}).then(canvas => {
-    const link = document.createElement('a');
-    link.download = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    canvas.toBlob(blob => {
+      const filename = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.png';
+      saveFile(blob, filename, 'image/png');
+    }, 'image/png');
   });
 });
 
@@ -331,17 +480,108 @@ document.getElementById('downloadSvg').addEventListener('click', () => {
 </svg>`;
 
   const blob = new Blob([svg], {type: 'image/svg+xml'});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.download = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.svg';
-  link.href = url;
-  link.click();
-  URL.revokeObjectURL(url);
+  const filename = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.svg';
+  saveFile(blob, filename, 'image/svg+xml');
 });
 
 function escapeXml(str){
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+function slugify(word, index){
+  const base = (word || 'card').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  return String(index).padStart(2,'0') + '-' + (base || 'card');
+}
+
+function parseBulkPairs(raw){
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const pairs = [];
+  for (let i = 0; i < lines.length - 1; i += 2) {
+    pairs.push({ word: lines[i], explanation: lines[i+1] });
+  }
+  if (lines.length % 2 !== 0) {
+    // odd line left over with no explanation — surface it rather than silently dropping it
+    pairs.push({ word: lines[lines.length - 1], explanation: '' });
+  }
+  return pairs;
+}
+
+function buildSvgString(word, explanation){
+  const W = 920, H = 1150;
+  const lines = explanation.split('\n').filter(l => l.length > 0);
+  const lineHeight = parseInt(explSize.value) * 1.35;
+  const totalHeight = lines.length * lineHeight;
+  const startY = H*0.72 - totalHeight/2 + lineHeight*0.8;
+
+  let explSvg = '';
+  lines.forEach((line, i) => {
+    explSvg += `<text x="${W/2}" y="${startY + i*lineHeight}" font-family="Noto Sans Devanagari, Arial, sans-serif" font-weight="600" font-size="${explSize.value}" fill="${explanationColor.value}" text-anchor="middle">${escapeXml(line)}</text>\n`;
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect x="0" y="0" width="${W}" height="${H*0.5}" fill="${topBg.value}"/>
+  <rect x="0" y="${H*0.5}" width="${W}" height="${H*0.5}" fill="${bottomBg.value}"/>
+  <text x="${W/2}" y="${H*0.28}" font-family="Arial, sans-serif" font-weight="800" font-size="${wordSize.value}" fill="${wordColor.value}" text-anchor="middle">${escapeXml(word)}</text>
+  ${explSvg}
+</svg>`;
+}
+
+async function buildPngBlob(word, explanation){
+  const bulkCardTop = document.getElementById('bulkCardTop');
+  const bulkCardBottom = document.getElementById('bulkCardBottom');
+  const bulkWordText = document.getElementById('bulkWordText');
+  const bulkExplanationText = document.getElementById('bulkExplanationText');
+
+  bulkCardTop.style.background = topBg.value;
+  bulkCardBottom.style.background = bottomBg.value;
+  bulkWordText.textContent = word;
+  bulkWordText.style.color = wordColor.value;
+  bulkWordText.style.fontSize = (parseInt(wordSize.value) * 2) + 'px';
+  bulkExplanationText.textContent = explanation;
+  bulkExplanationText.style.color = explanationColor.value;
+  bulkExplanationText.style.fontSize = (parseInt(explSize.value) * 2) + 'px';
+
+  // let the browser paint the updated offscreen card before capturing it
+  await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+
+  const canvas = await html2canvas(document.getElementById('bulkCard'), {scale: 1, backgroundColor: null});
+  return new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/png'));
+}
+
+document.getElementById('bulkGenerate').addEventListener('click', async () => {
+  const btn = document.getElementById('bulkGenerate');
+  const status = document.getElementById('bulkStatus');
+  const format = document.getElementById('bulkFormat').value;
+  const pairs = parseBulkPairs(document.getElementById('bulkInput').value);
+
+  if (pairs.length === 0) {
+    status.textContent = 'Paste at least one word + explanation pair first.';
+    return;
+  }
+
+  btn.disabled = true;
+  const zip = new JSZip();
+
+  for (let i = 0; i < pairs.length; i++) {
+    const { word, explanation } = pairs[i];
+    status.textContent = `Generating ${i + 1} of ${pairs.length}: ${word}...`;
+    const filename = slugify(word, i + 1) + '.' + format;
+
+    if (format === 'svg') {
+      zip.file(filename, buildSvgString(word, explanation));
+    } else {
+      const blob = await buildPngBlob(word, explanation);
+      zip.file(filename, blob);
+    }
+  }
+
+  status.textContent = 'Zipping files...';
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  await saveFile(zipBlob, 'word-cards.zip', 'application/zip');
+
+  status.textContent = `Done — ${pairs.length} cards exported.`;
+  btn.disabled = false;
+});
 </script>
 
 </body>
