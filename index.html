@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Card Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --bg-app:#1c1b19;
+    --panel:#242320;
+    --panel-border:#38362f;
+    --text:#eee9dc;
+    --text-dim:#a39d8c;
+    --accent:#c1663c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:var(--bg-app);
+    color:var(--text);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  header{
+    padding:28px 32px 16px;
+    border-bottom:1px solid var(--panel-border);
+  }
+  header h1{
+    margin:0 0 4px;
+    font-size:22px;
+    font-weight:800;
+    letter-spacing:-0.02em;
+  }
+  header p{
+    margin:0;
+    color:var(--text-dim);
+    font-size:14px;
+  }
+  main{
+    flex:1;
+    display:flex;
+    flex-wrap:wrap;
+    gap:28px;
+    padding:28px 32px 48px;
+  }
+  .controls{
+    width:340px;
+    flex-shrink:0;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .field label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--text-dim);
+    margin-bottom:6px;
+  }
+  .field input[type=text],
+  .field textarea{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:10px 12px;
+    color:var(--text);
+    font-family:inherit;
+    font-size:14px;
+    resize:vertical;
+  }
+  .field textarea{min-height:64px;}
+  .color-row{
+    display:flex;
+    gap:12px;
+  }
+  .color-field{flex:1;}
+  .color-field label{margin-bottom:6px;}
+  .color-field input[type=color]{
+    width:100%;
+    height:38px;
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    background:var(--panel);
+    padding:2px;
+    cursor:pointer;
+  }
+  .field-row{
+    display:flex;
+    gap:12px;
+  }
+  .field-row .field{flex:1;}
+  input[type=range]{width:100%;}
+  .range-val{
+    font-size:12px;
+    color:var(--text-dim);
+    float:right;
+  }
+  .actions{
+    display:flex;
+    gap:10px;
+    margin-top:8px;
+  }
+  button{
+    flex:1;
+    padding:12px 14px;
+    border-radius:8px;
+    border:none;
+    font-family:inherit;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    transition:transform 0.1s ease, opacity 0.15s ease;
+  }
+  button:active{transform:scale(0.97);}
+  #downloadPng{
+    background:var(--accent);
+    color:#fff;
+  }
+  #downloadSvg{
+    background:transparent;
+    border:1px solid var(--panel-border);
+    color:var(--text);
+  }
+  .preview-wrap{
+    flex:1;
+    min-width:320px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+  }
+  #card{
+    width:460px;
+    height:575px;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 20px 50px rgba(0,0,0,0.4);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  .card-top, .card-bottom{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    text-align:center;
+  }
+  .card-top{position:relative;}
+  .card-divider{
+    height:4px;
+    width:100%;
+  }
+  #wordText{
+    font-family:'Inter',sans-serif;
+    font-weight:800;
+    line-height:1.05;
+    letter-spacing:-0.01em;
+    word-break:break-word;
+    white-space:pre-wrap;
+  }
+  #explanationText{
+    font-family:'Noto Sans Devanagari','Inter',sans-serif;
+    font-weight:600;
+    line-height:1.35;
+    white-space:pre-wrap;
+  }
+  footer{
+    padding:16px 32px 28px;
+    color:var(--text-dim);
+    font-size:12px;
+    border-top:1px solid var(--panel-border);
+  }
+  footer a{color:var(--accent);}
+  @media (max-width:820px){
+    main{flex-direction:column;}
+    .controls{width:100%;}
+    #card{width:100%;max-width:460px;height:auto;aspect-ratio:800/1000;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Word Card Generator</h1>
+  <p>Build two-tone word + meaning cards like the "Manipulative" / "Resilient" series, then export as PNG or SVG.</p>
+</header>
+
+<main>
+  <div class="controls">
+
+    <div class="field">
+      <label for="wordInput">Word (top)</label>
+      <input type="text" id="wordInput" value="Resilient">
+    </div>
+
+    <div class="field">
+      <label for="explanationInput">Explanation (bottom, Hindi or any language)</label>
+      <textarea id="explanationInput">मुश्किलों से जल्दी
+उबरने वाला</textarea>
+    </div>
+
+    <div class="color-row">
+      <div class="color-field">
+        <label for="topBg">Top background</label>
+        <input type="color" id="topBg" value="#f3ecd8">
+      </div>
+      <div class="color-field">
+        <label for="bottomBg">Bottom background</label>
+        <input type="color" id="bottomBg" value="#b9c9ab">
+      </div>
+    </div>
+
+    <div class="color-row">
+      <div class="color-field">
+        <label for="wordColor">Word color</label>
+        <input type="color" id="wordColor" value="#b1502e">
+      </div>
+      <div class="color-field">
+        <label for="explanationColor">Explanation color</label>
+        <input type="color" id="explanationColor" value="#4b4b47">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="wordSize">Word size <span class="range-val" id="wordSizeVal">56px</span></label>
+        <input type="range" id="wordSize" min="28" max="80" value="56">
+      </div>
+      <div class="field">
+        <label for="explSize">Explanation size <span class="range-val" id="explSizeVal">34px</span></label>
+        <input type="range" id="explSize" min="18" max="48" value="34">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="downloadPng">Download PNG</button>
+      <button id="downloadSvg">Download SVG</button>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div id="card">
+      <div class="card-top" id="cardTop">
+        <div id="wordText"></div>
+      </div>
+      <div class="card-divider" id="cardDivider"></div>
+      <div class="card-bottom" id="cardBottom">
+        <div id="explanationText"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Runs entirely in the browser — no server needed. Host this folder as-is on GitHub Pages (Settings → Pages → deploy from branch).
+</footer>
+
+<script>
+const wordInput = document.getElementById('wordInput');
+const explanationInput = document.getElementById('explanationInput');
+const topBg = document.getElementById('topBg');
+const bottomBg = document.getElementById('bottomBg');
+const wordColor = document.getElementById('wordColor');
+const explanationColor = document.getElementById('explanationColor');
+const wordSize = document.getElementById('wordSize');
+const explSize = document.getElementById('explSize');
+const wordSizeVal = document.getElementById('wordSizeVal');
+const explSizeVal = document.getElementById('explSizeVal');
+
+const cardTop = document.getElementById('cardTop');
+const cardBottom = document.getElementById('cardBottom');
+const cardDivider = document.getElementById('cardDivider');
+const wordText = document.getElementById('wordText');
+const explanationText = document.getElementById('explanationText');
+
+function shade(hex, amt){
+  const c = hex.replace('#','');
+  const num = parseInt(c,16);
+  let r = (num>>16)+amt, g=((num>>8)&0xff)+amt, b=(num&0xff)+amt;
+  r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function render(){
+  cardTop.style.background = topBg.value;
+  cardBottom.style.background = bottomBg.value;
+  cardDivider.style.background = shade(topBg.value, -12);
+  wordText.textContent = wordInput.value;
+  wordText.style.color = wordColor.value;
+  wordText.style.fontSize = wordSize.value + 'px';
+  explanationText.textContent = explanationInput.value;
+  explanationText.style.color = explanationColor.value;
+  explanationText.style.fontSize = explSize.value + 'px';
+  wordSizeVal.textContent = wordSize.value + 'px';
+  explSizeVal.textContent = explSize.value + 'px';
+}
+
+[wordInput, explanationInput, topBg, bottomBg, wordColor, explanationColor, wordSize, explSize]
+  .forEach(el => el.addEventListener('input', render));
+
+render();
+
+document.getElementById('downloadPng').addEventListener('click', () => {
+  const card = document.getElementById('card');
+  html2canvas(card, {scale: 2, backgroundColor: null}).then(canvas => {
+    const link = document.createElement('a');
+    link.download = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+});
+
+document.getElementById('downloadSvg').addEventListener('click', () => {
+  const W = 920, H = 1150;
+  const lines = explanationInput.value.split('\n');
+  const lineHeight = parseInt(explSize.value) * 1.35;
+  const totalHeight = lines.length * lineHeight;
+  const startY = H*0.72 - totalHeight/2 + lineHeight*0.8;
+
+  let explSvg = '';
+  lines.forEach((line, i) => {
+    explSvg += `<text x="${W/2}" y="${startY + i*lineHeight}" font-family="Noto Sans Devanagari, Arial, sans-serif" font-weight="600" font-size="${explSize.value}" fill="${explanationColor.value}" text-anchor="middle">${escapeXml(line)}</text>\n`;
+  });
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect x="0" y="0" width="${W}" height="${H*0.5}" fill="${topBg.value}"/>
+  <rect x="0" y="${H*0.5+5}" width="${W}" height="${H*0.5}" fill="${bottomBg.value}"/>
+  <rect x="0" y="${H*0.5-3}" width="${W}" height="8" fill="${shade(topBg.value,-12)}"/>
+  <text x="${W/2}" y="${H*0.28}" font-family="Arial, sans-serif" font-weight="800" font-size="${wordSize.value}" fill="${wordColor.value}" text-anchor="middle">${escapeXml(wordInput.value)}</text>
+  ${explSvg}
+</svg>`;
+
+  const blob = new Blob([svg], {type: 'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.download = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.svg';
+  link.href = url;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+function escapeXml(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+
+</body>
+</html>
