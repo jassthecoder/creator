@@ -169,6 +169,30 @@
     line-height:1.35;
     white-space:pre-wrap;
   }
+  .toggle-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .toggle-row input[type=checkbox]{
+    width:16px;
+    height:16px;
+    accent-color:var(--accent);
+    cursor:pointer;
+  }
+  .toggle-row label{
+    margin-bottom:0;
+    cursor:pointer;
+  }
+  .sub-controls{
+    display:flex;
+    gap:12px;
+    margin-top:10px;
+  }
+  .sub-controls.disabled{
+    opacity:0.4;
+    pointer-events:none;
+  }
   .bulk-section{
     margin:0 32px 32px;
     background:var(--panel);
@@ -314,6 +338,23 @@
       </div>
     </div>
 
+    <div class="field">
+      <div class="toggle-row">
+        <input type="checkbox" id="middleBorderToggle">
+        <label for="middleBorderToggle">Show middle border</label>
+      </div>
+      <div class="sub-controls disabled" id="middleBorderSubControls">
+        <div class="color-field" style="flex:1;">
+          <label for="middleBorderColor">Border color</label>
+          <input type="color" id="middleBorderColor" value="#c1663c">
+        </div>
+        <div class="field" style="flex:1;">
+          <label for="middleBorderWidth">Width <span class="range-val" id="middleBorderWidthVal">4px</span></label>
+          <input type="range" id="middleBorderWidth" min="1" max="20" value="4">
+        </div>
+      </div>
+    </div>
+
     <div class="actions">
       <button id="downloadPng">Download PNG</button>
       <button id="downloadSvg">Download SVG</button>
@@ -335,7 +376,7 @@
 <section class="bulk-section">
   <h2>Bulk generation</h2>
   <p class="hint">
-    Paste word/explanation pairs, one per line, alternating — word, then its explanation, word, then its explanation, and so on (blank lines are ignored). Uses the colors and font sizes set above for every card. All cards are packaged into a single .zip you can download in one go.
+    Paste word/explanation pairs, one per line, alternating — word, then its explanation, word, then its explanation, and so on (blank lines are ignored). Uses the colors, font sizes, and middle border setting from above for every card. All cards are packaged into a single .zip you can download in one go.
   </p>
   <textarea id="bulkInput" placeholder="Resilient
 मुश्किलों से जल्दी उबरने वाला
@@ -380,6 +421,12 @@ const explSize = document.getElementById('explSize');
 const wordSizeVal = document.getElementById('wordSizeVal');
 const explSizeVal = document.getElementById('explSizeVal');
 
+const middleBorderToggle = document.getElementById('middleBorderToggle');
+const middleBorderColor = document.getElementById('middleBorderColor');
+const middleBorderWidth = document.getElementById('middleBorderWidth');
+const middleBorderWidthVal = document.getElementById('middleBorderWidthVal');
+const middleBorderSubControls = document.getElementById('middleBorderSubControls');
+
 const cardTop = document.getElementById('cardTop');
 const cardBottom = document.getElementById('cardBottom');
 const wordText = document.getElementById('wordText');
@@ -404,9 +451,18 @@ function render(){
   explanationText.style.fontSize = explSize.value + 'px';
   wordSizeVal.textContent = wordSize.value + 'px';
   explSizeVal.textContent = explSize.value + 'px';
+
+  middleBorderWidthVal.textContent = middleBorderWidth.value + 'px';
+  middleBorderSubControls.classList.toggle('disabled', !middleBorderToggle.checked);
+  if (middleBorderToggle.checked) {
+    cardBottom.style.borderTop = middleBorderWidth.value + 'px solid ' + middleBorderColor.value;
+  } else {
+    cardBottom.style.borderTop = 'none';
+  }
 }
 
-[wordInput, explanationInput, topBg, bottomBg, wordColor, explanationColor, wordSize, explSize]
+[wordInput, explanationInput, topBg, bottomBg, wordColor, explanationColor, wordSize, explSize,
+ middleBorderToggle, middleBorderColor, middleBorderWidth]
   .forEach(el => el.addEventListener('input', render));
 
 render();
@@ -461,24 +517,7 @@ document.getElementById('downloadPng').addEventListener('click', () => {
 });
 
 document.getElementById('downloadSvg').addEventListener('click', () => {
-  const W = 920, H = 1150;
-  const lines = explanationInput.value.split('\n');
-  const lineHeight = parseInt(explSize.value) * 1.35;
-  const totalHeight = lines.length * lineHeight;
-  const startY = H*0.72 - totalHeight/2 + lineHeight*0.8;
-
-  let explSvg = '';
-  lines.forEach((line, i) => {
-    explSvg += `<text x="${W/2}" y="${startY + i*lineHeight}" font-family="Noto Sans Devanagari, Arial, sans-serif" font-weight="600" font-size="${explSize.value}" fill="${explanationColor.value}" text-anchor="middle">${escapeXml(line)}</text>\n`;
-  });
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect x="0" y="0" width="${W}" height="${H*0.5}" fill="${topBg.value}"/>
-  <rect x="0" y="${H*0.5}" width="${W}" height="${H*0.5}" fill="${bottomBg.value}"/>
-  <text x="${W/2}" y="${H*0.28}" font-family="Arial, sans-serif" font-weight="800" font-size="${wordSize.value}" fill="${wordColor.value}" text-anchor="middle">${escapeXml(wordInput.value)}</text>
-  ${explSvg}
-</svg>`;
-
+  const svg = buildSvgString(wordInput.value, explanationInput.value);
   const blob = new Blob([svg], {type: 'image/svg+xml'});
   const filename = (wordInput.value || 'card').toLowerCase().replace(/\s+/g,'-') + '.svg';
   saveFile(blob, filename, 'image/svg+xml');
@@ -518,9 +557,18 @@ function buildSvgString(word, explanation){
     explSvg += `<text x="${W/2}" y="${startY + i*lineHeight}" font-family="Noto Sans Devanagari, Arial, sans-serif" font-weight="600" font-size="${explSize.value}" fill="${explanationColor.value}" text-anchor="middle">${escapeXml(line)}</text>\n`;
   });
 
+  // Middle border is optional and drawn only when the toggle is on — scaled 2x
+  // to match the 920x1150 export resolution vs. the 460x575 on-screen preview.
+  let borderSvg = '';
+  if (middleBorderToggle.checked) {
+    const bw = parseInt(middleBorderWidth.value) * 2;
+    borderSvg = `<rect x="0" y="${H/2 - bw/2}" width="${W}" height="${bw}" fill="${middleBorderColor.value}"/>`;
+  }
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <rect x="0" y="0" width="${W}" height="${H*0.5}" fill="${topBg.value}"/>
   <rect x="0" y="${H*0.5}" width="${W}" height="${H*0.5}" fill="${bottomBg.value}"/>
+  ${borderSvg}
   <text x="${W/2}" y="${H*0.28}" font-family="Arial, sans-serif" font-weight="800" font-size="${wordSize.value}" fill="${wordColor.value}" text-anchor="middle">${escapeXml(word)}</text>
   ${explSvg}
 </svg>`;
@@ -540,6 +588,13 @@ async function buildPngBlob(word, explanation){
   bulkExplanationText.textContent = explanation;
   bulkExplanationText.style.color = explanationColor.value;
   bulkExplanationText.style.fontSize = (parseInt(explSize.value) * 2) + 'px';
+
+  // Middle border mirrors the toggle state, scaled 2x to match this stage's resolution.
+  if (middleBorderToggle.checked) {
+    bulkCardBottom.style.borderTop = (parseInt(middleBorderWidth.value) * 2) + 'px solid ' + middleBorderColor.value;
+  } else {
+    bulkCardBottom.style.borderTop = 'none';
+  }
 
   // let the browser paint the updated offscreen card before capturing it
   await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
